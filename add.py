@@ -8,7 +8,10 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🔎 Vinted Finder")# ============================================================
+st.title("🔎 Vinted Finder")
+st.caption("Analyse automatiquement les opportunités d'achat-revente.")
+
+# ============================================================
 # MOTEUR DE RECHERCHE VINTED
 # ============================================================
 
@@ -75,8 +78,6 @@ st.link_button(
     "🔎 Rechercher sur Vinted",
     url_recherche
 )
-
-st.caption("Analyse automatiquement les opportunités d'achat-revente.")
 
 # ============================================================
 # PARAMÈTRES
@@ -192,7 +193,7 @@ PRIX_REVENTE = {
 }
 
 # ============================================================
-# ESTIMATION
+# ESTIMATION DU PRIX DE REVENTE
 # ============================================================
 
 def trouver_marque(marque):
@@ -223,7 +224,6 @@ def estimer_revente(row):
             donnees["default"]
         )
 
-    # Ajustement selon l'état
     etat = str(row["Etat"]).lower()
 
     if "neuf avec" in etat:
@@ -243,9 +243,8 @@ def estimer_revente(row):
 
     return round(prix, 2)
 
-
 # ============================================================
-# CHARGEMENT
+# CHARGEMENT DU CSV
 # ============================================================
 
 try:
@@ -254,13 +253,12 @@ try:
 
 except Exception as e:
 
-    st.error("Impossible de charger annonces.csv")
+    st.error("❌ Impossible de charger annonces.csv")
     st.code(str(e))
     st.stop()
 
-
 # ============================================================
-# COLONNES
+# VÉRIFICATION DES COLONNES
 # ============================================================
 
 colonnes_obligatoires = [
@@ -288,7 +286,6 @@ if manquantes:
 
     st.stop()
 
-
 # ============================================================
 # NETTOYAGE
 # ============================================================
@@ -303,7 +300,7 @@ annonces = annonces.dropna(
 )
 
 # ============================================================
-# NOUVELLE ESTIMATION
+# CALCULS
 # ============================================================
 
 annonces["Revente estimée"] = annonces.apply(
@@ -333,7 +330,6 @@ def calcul_score(row):
     marge = row["Marge estimée"]
     roi = row["ROI estimé"]
 
-    # Marge
     if marge >= 50:
         score += 40
     elif marge >= 40:
@@ -345,7 +341,6 @@ def calcul_score(row):
     elif marge >= 10:
         score += 12
 
-    # ROI
     if roi >= 200:
         score += 40
     elif roi >= 150:
@@ -357,7 +352,6 @@ def calcul_score(row):
     elif roi >= 50:
         score += 15
 
-    # État
     etat = str(row["Etat"]).lower()
 
     if "neuf avec" in etat:
@@ -450,20 +444,26 @@ with c4:
         )
 
 # ============================================================
-# MEILLEURES AFFAIRES
+# TOP DES AFFAIRES
 # ============================================================
 
-st.subheader("🔥 Meilleures opportunités")
+st.subheader("🎯 TOP DES AFFAIRES")
 
-if len(resultats) == 0:
+if len(resultats) > 0:
 
-    st.warning(
-        "Aucune opportunité ne correspond aux critères."
+    top_n = st.slider(
+        "Nombre d'opportunités à afficher",
+        min_value=1,
+        max_value=min(20, len(resultats)),
+        value=min(5, len(resultats))
     )
 
-else:
+    top_resultats = resultats.head(top_n)
 
-    for _, annonce in resultats.iterrows():
+    for rang, (_, annonce) in enumerate(
+        top_resultats.iterrows(),
+        start=1
+    ):
 
         score = annonce["Score"]
 
@@ -477,23 +477,23 @@ else:
             niveau = "🔴 FAIBLE"
 
         st.markdown(
-            f"## {niveau}"
+            f"### #{rang} — {niveau}"
+        )
+
+        st.markdown(
+            f"**{annonce['Article']}**"
         )
 
         gauche, droite = st.columns([3, 1])
 
         with gauche:
 
-            st.markdown(
-                f"### {annonce['Article']}"
+            st.write(
+                f"🏷️ Marque : **{annonce['Marque']}**"
             )
 
             st.write(
-                f"🏷️ **{annonce['Marque']}**"
-            )
-
-            st.write(
-                f"📦 {annonce['Categorie']}"
+                f"📦 Catégorie : {annonce['Categorie']}"
             )
 
             st.write(
@@ -501,13 +501,13 @@ else:
             )
 
             st.write(
-                f"✨ {annonce['Etat']}"
+                f"✨ État : {annonce['Etat']}"
             )
 
             if str(annonce["URL"]).startswith("http"):
 
                 st.link_button(
-                    "🔗 Voir l'annonce",
+                    "🔗 Ouvrir l'annonce",
                     annonce["URL"]
                 )
 
@@ -519,7 +519,7 @@ else:
             )
 
             st.metric(
-                "💰 Revente estimée",
+                "💰 Revente",
                 f"{annonce['Revente estimée']:.2f} €"
             )
 
@@ -540,8 +540,14 @@ else:
 
         st.divider()
 
+else:
+
+    st.info(
+        "Aucune opportunité ne correspond à tes critères."
+    )
+
 # ============================================================
-# TABLEAU
+# TABLEAU COMPLET
 # ============================================================
 
 with st.expander("📋 Voir toutes les opportunités"):
@@ -566,10 +572,10 @@ with st.expander("📋 Voir toutes les opportunités"):
     )
 
 # ============================================================
-# AVERTISSEMENT
+# FIN
 # ============================================================
 
 st.caption(
-    "⚠️ Les prix de revente sont des estimations. "
-    "Ils ne garantissent pas le prix auquel l'article sera vendu."
+    "⚠️ Les prix de revente sont des estimations et ne garantissent "
+    "pas le prix final de vente."
 )
