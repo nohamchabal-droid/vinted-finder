@@ -8,7 +8,74 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🔎 Vinted Finder")
+st.title("🔎 Vinted Finder")# ============================================================
+# MOTEUR DE RECHERCHE VINTED
+# ============================================================
+
+st.subheader("🔍 Trouver une recherche")
+
+marques_recherche = [
+    "Ralph Lauren",
+    "Nike",
+    "Adidas",
+    "Lacoste",
+    "Carhartt",
+    "The North Face",
+    "Tommy Hilfiger",
+    "Fred Perry",
+    "Levi's",
+    "New Balance",
+    "Asics",
+    "Patagonia",
+]
+
+articles_recherche = [
+    "Half Zip",
+    "Quarter Zip",
+    "Zip",
+    "Pull",
+    "Sweat",
+    "Hoodie",
+    "Polo",
+    "Veste",
+    "Pantalon",
+    "Jogging",
+    "T-shirt",
+]
+
+marque_choisie = st.selectbox(
+    "🏷️ Marque",
+    marques_recherche
+)
+
+article_choisi = st.selectbox(
+    "👕 Article",
+    articles_recherche
+)
+
+prix_max_recherche = st.number_input(
+    "💶 Prix maximum",
+    min_value=1,
+    max_value=500,
+    value=30
+)
+
+recherche = f"{marque_choisie} {article_choisi}"
+
+url_recherche = (
+    "https://www.vinted.fr/catalog?search_text="
+    + urllib.parse.quote_plus(recherche)
+)
+
+st.success(
+    f"Recherche créée : **{recherche}** — maximum **{prix_max_recherche} €**"
+)
+
+st.link_button(
+    "🔎 Rechercher sur Vinted",
+    url_recherche
+)
+
 st.caption("Analyse automatiquement les opportunités d'achat-revente.")
 
 # ============================================================
