@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import urllib.parse
+import re
 
 # ============================================================
 # CONFIGURATION
@@ -13,13 +14,14 @@ st.set_page_config(
 )
 
 st.title("🔎 Vinted Finder")
-st.caption("Ton assistant pour repérer et analyser les opportunités.")
+st.caption("Analyseur d'opportunités d'achat-revente")
 
 # ============================================================
-# MARQUES
+# LISTES
 # ============================================================
 
 MARQUES = [
+    "Toutes",
     "Ralph Lauren",
     "Nike",
     "Adidas",
@@ -43,6 +45,7 @@ MARQUES = [
 ]
 
 ARTICLES = [
+    "Tous",
     "Half Zip",
     "Quarter Zip",
     "Zip",
@@ -60,91 +63,8 @@ ARTICLES = [
     "Polaire",
 ]
 
-ETATS = [
-    "Neuf avec étiquette",
-    "Neuf sans étiquette",
-    "Très bon état",
-    "Bon état",
-    "Satisfaisant",
-]
-
 # ============================================================
-# BARRE LATÉRALE
-# ============================================================
-
-st.sidebar.header("⚙️ Critères")
-
-budget = st.sidebar.number_input(
-    "💶 Prix maximum d'achat",
-    min_value=1.0,
-    max_value=1000.0,
-    value=40.0,
-    step=1.0
-)
-
-marge_min = st.sidebar.number_input(
-    "💰 Marge minimum",
-    min_value=0.0,
-    max_value=1000.0,
-    value=15.0,
-    step=1.0
-)
-
-roi_min = st.sidebar.number_input(
-    "📈 ROI minimum",
-    min_value=0.0,
-    max_value=1000.0,
-    value=50.0,
-    step=5.0
-)
-
-# ============================================================
-# RECHERCHE VINTED
-# ============================================================
-
-st.subheader("🔍 Recherche Vinted")
-
-col1, col2 = st.columns(2)
-
-with col1:
-
-    marque = st.selectbox(
-        "🏷️ Marque",
-        MARQUES
-    )
-
-with col2:
-
-    article = st.selectbox(
-        "👕 Article",
-        ARTICLES
-    )
-
-prix_recherche = st.number_input(
-    "💶 Budget maximum pour cette recherche",
-    min_value=1,
-    max_value=1000,
-    value=30
-)
-
-recherche = f"{marque} {article}"
-
-url_vinted = (
-    "https://www.vinted.fr/catalog?search_text="
-    + urllib.parse.quote_plus(recherche)
-)
-
-st.info(
-    f"Recherche : **{recherche}** — jusqu'à **{prix_recherche} €**"
-)
-
-st.link_button(
-    "🔎 Ouvrir la recherche Vinted",
-    url_vinted
-)
-
-# ============================================================
-# PRIX DE REVENTE DE RÉFÉRENCE
+# PRIX DE RÉFÉRENCE
 # ============================================================
 
 PRIX_REVENTE = {
@@ -254,7 +174,7 @@ PRIX_REVENTE = {
         "T-shirt": 30,
         "Chemise": 40,
         "Jean": 45,
-        "Polaire": 70,
+        "Polaire": 80,
     },
 
     "Tommy Hilfiger": {
@@ -313,71 +233,80 @@ PRIX_REVENTE = {
 }
 
 # ============================================================
-# FONCTION ESTIMATION
+# FONCTIONS
 # ============================================================
 
-def trouver_marque(marque_annonce):
+def trouver_marque(texte):
 
-    texte = str(marque_annonce).lower()
+    texte = str(texte).lower()
 
-    for marque_connue in PRIX_REVENTE:
+    for marque in PRIX_REVENTE:
 
-        if marque_connue.lower() in texte:
-            return marque_connue
+        if marque.lower() in texte:
+            return marque
 
     return None
 
 
-def trouver_categorie(article):
+def trouver_article(texte):
 
-    texte = str(article).lower()
+    texte = str(texte).lower()
 
-    correspondances = {
-        "half zip": "Half Zip",
-        "quarter zip": "Quarter Zip",
-        "zip": "Zip",
-        "pull": "Pull",
-        "sweat": "Sweat",
-        "hoodie": "Hoodie",
-        "polo": "Polo",
-        "veste": "Veste",
-        "doudoune": "Doudoune",
-        "pantalon": "Pantalon",
-        "jogging": "Jogging",
-        "t-shirt": "T-shirt",
-        "chemise": "Chemise",
-        "jean": "Jean",
-        "polaire": "Polaire",
-    }
+    correspondances = [
+        ("half zip", "Half Zip"),
+        ("half-zip", "Half Zip"),
+        ("quarter zip", "Quarter Zip"),
+        ("quarter-zip", "Quarter Zip"),
+        ("hoodie", "Hoodie"),
+        ("sweat", "Sweat"),
+        ("polo", "Polo"),
+        ("doudoune", "Doudoune"),
+        ("polaire", "Polaire"),
+        ("jogging", "Jogging"),
+        ("pantalon", "Pantalon"),
+        ("chemise", "Chemise"),
+        ("t-shirt", "T-shirt"),
+        ("tshirt", "T-shirt"),
+        ("jean", "Jean"),
+        ("veste", "Veste"),
+        ("pull", "Pull"),
+        ("zip", "Zip"),
+    ]
 
-    for mot, categorie in correspondances.items():
+    for mot, article in correspondances:
 
         if mot in texte:
-            return categorie
+            return article
 
     return None
 
 
 def estimer_revente(row):
 
-    marque = trouver_marque(row["Marque"])
-
-    categorie = trouver_categorie(
-        row["Article"]
+    marque = trouver_marque(
+        f"{row['Marque']} {row['Article']}"
     )
 
-    if marque is None:
+    article = trouver_article(
+        f"{row['Article']} {row['Categorie']}"
+    )
 
-        prix = 40
+    if marque and article:
 
-    elif categorie in PRIX_REVENTE[marque]:
+        prix = PRIX_REVENTE[marque].get(
+            article,
+            45
+        )
 
-        prix = PRIX_REVENTE[marque][categorie]
-
-    else:
+    elif marque:
 
         prix = 45
 
+    else:
+
+        prix = 35
+
+    # Ajustement état
     etat = str(row["Etat"]).lower()
 
     if "neuf avec" in etat:
@@ -397,29 +326,176 @@ def estimer_revente(row):
 
     return round(prix, 2)
 
-# ============================================================
-# CHARGEMENT DES ANNONCES
-# ============================================================
 
-st.divider()
+def calcul_score(row):
 
-st.subheader("📦 Données des annonces")
+    score = 0
 
-try:
+    marge = row["Marge estimée"]
+    roi = row["ROI estimé"]
 
-    annonces = pd.read_csv("annonces.csv")
+    # Marge
+    if marge >= 50:
+        score += 35
+    elif marge >= 40:
+        score += 30
+    elif marge >= 30:
+        score += 25
+    elif marge >= 20:
+        score += 18
+    elif marge >= 10:
+        score += 10
 
-except Exception as erreur:
+    # ROI
+    if roi >= 200:
+        score += 35
+    elif roi >= 150:
+        score += 30
+    elif roi >= 100:
+        score += 25
+    elif roi >= 75:
+        score += 20
+    elif roi >= 50:
+        score += 15
 
-    st.error(
-        "❌ Le fichier annonces.csv est introuvable."
+    # Etat
+    etat = str(row["Etat"]).lower()
+
+    if "neuf avec" in etat:
+        score += 20
+    elif "neuf sans" in etat:
+        score += 18
+    elif "très bon" in etat:
+        score += 15
+    elif "bon état" in etat:
+        score += 8
+
+    # Marque reconnue
+    marque = trouver_marque(
+        f"{row['Marque']} {row['Article']}"
     )
 
-    st.write(
-        "Vérifie qu'il est bien à la racine de ton dépôt GitHub."
+    if marque:
+        score += 10
+
+    return min(score, 100)
+
+
+def analyser_annonces(df):
+
+    df = df.copy()
+
+    df["Prix"] = pd.to_numeric(
+        df["Prix"],
+        errors="coerce"
+    )
+
+    df = df.dropna(
+        subset=["Prix"]
+    )
+
+    df["Revente estimée"] = df.apply(
+        estimer_revente,
+        axis=1
+    )
+
+    df["Marge estimée"] = (
+        df["Revente estimée"]
+        - df["Prix"]
+    )
+
+    df["ROI estimé"] = (
+        df["Marge estimée"]
+        / df["Prix"].replace(0, 1)
+        * 100
+    )
+
+    df["Score"] = df.apply(
+        calcul_score,
+        axis=1
+    )
+
+    return df
+
+
+# ============================================================
+# IMPORT DES ANNONCES
+# ============================================================
+
+st.sidebar.header("📥 Données")
+
+fichier = st.sidebar.file_uploader(
+    "Importer un fichier CSV",
+    type=["csv"]
+)
+
+# ============================================================
+# CHARGEMENT
+# ============================================================
+
+if fichier is not None:
+
+    try:
+
+        annonces = pd.read_csv(
+            fichier
+        )
+
+        st.sidebar.success(
+            "✅ Fichier importé"
+        )
+
+    except Exception as erreur:
+
+        st.error(
+            f"Impossible de lire le fichier : {erreur}"
+        )
+
+        st.stop()
+
+else:
+
+    try:
+
+        annonces = pd.read_csv(
+            "annonces.csv"
+        )
+
+        st.sidebar.info(
+            "📄 Utilisation de annonces.csv"
+        )
+
+    except:
+
+        annonces = pd.DataFrame()
+
+
+# ============================================================
+# DONNÉES VIDES
+# ============================================================
+
+if annonces.empty:
+
+    st.info(
+        "📥 Importe ton fichier CSV pour commencer."
+    )
+
+    st.markdown(
+        """
+### Format recommandé
+
+Ton fichier doit contenir au minimum :
+
+`Article | Marque | Categorie | Prix | Etat | Taille | URL`
+
+Exemple :
+
+`Half Zip | Ralph Lauren | Pull | 25 | Très bon état | M | https://...`
+        """
     )
 
     st.stop()
+
 
 # ============================================================
 # VÉRIFICATION
@@ -436,223 +512,285 @@ colonnes_obligatoires = [
 ]
 
 manquantes = [
-    colonne
-    for colonne in colonnes_obligatoires
-    if colonne not in annonces.columns
+    c for c in colonnes_obligatoires
+    if c not in annonces.columns
 ]
 
 if manquantes:
 
     st.error(
-        "Colonnes manquantes dans annonces.csv : "
+        "❌ Colonnes manquantes : "
         + ", ".join(manquantes)
+    )
+
+    st.info(
+        "Colonnes nécessaires : "
+        + ", ".join(colonnes_obligatoires)
     )
 
     st.stop()
 
-# ============================================================
-# NETTOYAGE
-# ============================================================
-
-annonces["Prix"] = pd.to_numeric(
-    annonces["Prix"],
-    errors="coerce"
-)
-
-annonces = annonces.dropna(
-    subset=["Prix"]
-)
 
 # ============================================================
 # ANALYSE
 # ============================================================
 
-annonces["Revente estimée"] = annonces.apply(
-    estimer_revente,
-    axis=1
-)
-
-annonces["Marge estimée"] = (
-    annonces["Revente estimée"]
-    - annonces["Prix"]
-)
-
-annonces["ROI estimé"] = (
-    annonces["Marge estimée"]
-    / annonces["Prix"]
-    * 100
-)
-
-# ============================================================
-# SCORE
-# ============================================================
-
-def calcul_score(row):
-
-    score = 0
-
-    marge = row["Marge estimée"]
-    roi = row["ROI estimé"]
-
-    # Marge
-    if marge >= 50:
-        score += 35
-
-    elif marge >= 40:
-        score += 30
-
-    elif marge >= 30:
-        score += 25
-
-    elif marge >= 20:
-        score += 18
-
-    elif marge >= 10:
-        score += 10
-
-    # ROI
-    if roi >= 200:
-        score += 35
-
-    elif roi >= 150:
-        score += 30
-
-    elif roi >= 100:
-        score += 25
-
-    elif roi >= 75:
-        score += 20
-
-    elif roi >= 50:
-        score += 15
-
-    # État
-    etat = str(row["Etat"]).lower()
-
-    if "neuf avec" in etat:
-        score += 20
-
-    elif "neuf sans" in etat:
-        score += 18
-
-    elif "très bon" in etat:
-        score += 15
-
-    elif "bon état" in etat:
-        score += 8
-
-    return min(score, 100)
-
-
-annonces["Score"] = annonces.apply(
-    calcul_score,
-    axis=1
+annonces = analyser_annonces(
+    annonces
 )
 
 # ============================================================
 # FILTRES
 # ============================================================
 
+st.sidebar.header("🎯 Filtres")
+
+budget = st.sidebar.number_input(
+    "Prix maximum (€)",
+    min_value=1.0,
+    max_value=1000.0,
+    value=40.0,
+    step=1.0
+)
+
+marge_min = st.sidebar.number_input(
+    "Marge minimum (€)",
+    min_value=0.0,
+    max_value=1000.0,
+    value=15.0,
+    step=1.0
+)
+
+roi_min = st.sidebar.number_input(
+    "ROI minimum (%)",
+    min_value=0.0,
+    max_value=1000.0,
+    value=50.0,
+    step=5.0
+)
+
+marque_filtre = st.sidebar.selectbox(
+    "Marque",
+    MARQUES
+)
+
+article_filtre = st.sidebar.selectbox(
+    "Article",
+    ARTICLES
+)
+
+# ============================================================
+# APPLICATION DES FILTRES
+# ============================================================
+
 resultats = annonces[
-    (annonces["Prix"] <= budget)
-    &
-    (annonces["Marge estimée"] >= marge_min)
-    &
-    (annonces["ROI estimé"] >= roi_min)
+    annonces["Prix"] <= budget
 ].copy()
+
+resultats = resultats[
+    resultats["Marge estimée"] >= marge_min
+]
+
+resultats = resultats[
+    resultats["ROI estimé"] >= roi_min
+]
+
+if marque_filtre != "Toutes":
+
+    resultats = resultats[
+        resultats["Marque"]
+        .astype(str)
+        .str.contains(
+            marque_filtre,
+            case=False,
+            na=False
+        )
+    ]
+
+if article_filtre != "Tous":
+
+    texte_article = (
+        resultats["Article"].astype(str)
+        + " "
+        + resultats["Categorie"].astype(str)
+    )
+
+    resultats = resultats[
+        texte_article.str.contains(
+            article_filtre,
+            case=False,
+            na=False
+        )
+    ]
 
 resultats = resultats.sort_values(
     by="Score",
     ascending=False
 )
 
+
+# ============================================================
+# RECHERCHE VINTED
+# ============================================================
+
+st.divider()
+
+st.subheader("🔎 Recherche Vinted")
+
+c1, c2 = st.columns(2)
+
+with c1:
+
+    recherche_marque = st.selectbox(
+        "Marque recherchée",
+        MARQUES[1:]
+    )
+
+with c2:
+
+    recherche_article = st.selectbox(
+        "Article recherché",
+        ARTICLES[1:]
+    )
+
+recherche = (
+    recherche_marque
+    + " "
+    + recherche_article
+)
+
+url = (
+    "https://www.vinted.fr/catalog?search_text="
+    + urllib.parse.quote_plus(recherche)
+)
+
+st.link_button(
+    "🔎 Ouvrir cette recherche sur Vinted",
+    url
+)
+
+st.caption(
+    "Le bouton ouvre une recherche Vinted. "
+    "Il ne récupère pas automatiquement les annonces."
+)
+
+
 # ============================================================
 # STATISTIQUES
 # ============================================================
 
-st.subheader("📊 Résultats")
+st.divider()
 
-c1, c2, c3, c4 = st.columns(4)
+st.subheader("📊 Analyse")
 
-with c1:
+a, b, c, d = st.columns(4)
+
+with a:
 
     st.metric(
         "🔥 Opportunités",
         len(resultats)
     )
 
-with c2:
+with b:
 
-    st.metric(
-        "💰 Marge moyenne",
-        f"{resultats['Marge estimée'].mean():.0f} €"
-        if len(resultats)
-        else "—"
-    )
+    if len(resultats):
 
-with c3:
+        st.metric(
+            "💰 Marge moyenne",
+            f"{resultats['Marge estimée'].mean():.0f} €"
+        )
 
-    st.metric(
-        "📈 ROI moyen",
-        f"{resultats['ROI estimé'].mean():.0f} %"
-        if len(resultats)
-        else "—"
-    )
+    else:
 
-with c4:
+        st.metric(
+            "💰 Marge moyenne",
+            "—"
+        )
 
-    st.metric(
-        "⭐ Meilleur score",
-        f"{resultats['Score'].max()}/100"
-        if len(resultats)
-        else "—"
-    )
+with c:
+
+    if len(resultats):
+
+        st.metric(
+            "📈 ROI moyen",
+            f"{resultats['ROI estimé'].mean():.0f} %"
+        )
+
+    else:
+
+        st.metric(
+            "📈 ROI moyen",
+            "—"
+        )
+
+with d:
+
+    if len(resultats):
+
+        st.metric(
+            "⭐ Meilleur score",
+            f"{resultats['Score'].max()}/100"
+        )
+
+    else:
+
+        st.metric(
+            "⭐ Meilleur score",
+            "—"
+        )
+
 
 # ============================================================
-# TOP DES AFFAIRES
+# TOP AFFAIRES
 # ============================================================
 
-st.subheader("🏆 TOP DES AFFAIRES")
+st.subheader("🏆 Meilleures opportunités")
 
-if len(resultats) > 0:
+if len(resultats) == 0:
 
-    top_n = st.slider(
-        "Nombre d'affaires à afficher",
-        min_value=1,
-        max_value=min(20, len(resultats)),
-        value=min(5, len(resultats))
+    st.warning(
+        "Aucune annonce ne correspond à tes critères."
     )
 
-    top_resultats = resultats.head(top_n)
+else:
+
+    nombre = st.slider(
+        "Nombre d'annonces",
+        1,
+        min(20, len(resultats)),
+        min(5, len(resultats))
+    )
+
+    top = resultats.head(
+        nombre
+    )
 
     for rang, (_, annonce) in enumerate(
-        top_resultats.iterrows(),
+        top.iterrows(),
         start=1
     ):
 
-        score = annonce["Score"]
+        score = int(
+            annonce["Score"]
+        )
 
         if score >= 85:
-
-            niveau = "🔥 EXCELLENTE AFFAIRE"
-
+            niveau = "🔥 EXCELLENTE"
         elif score >= 70:
-
-            niveau = "🟢 BONNE AFFAIRE"
-
+            niveau = "🟢 TRÈS INTÉRESSANTE"
         elif score >= 50:
-
             niveau = "🟡 À ÉTUDIER"
-
         else:
-
             niveau = "🔴 FAIBLE"
 
         st.markdown(
             f"## #{rang} — {niveau}"
         )
 
-        gauche, droite = st.columns([3, 1])
+        gauche, droite = st.columns(
+            [3, 1]
+        )
 
         with gauche:
 
@@ -661,11 +799,11 @@ if len(resultats) > 0:
             )
 
             st.write(
-                f"🏷️ **{annonce['Marque']}**"
+                f"🏷️ Marque : **{annonce['Marque']}**"
             )
 
             st.write(
-                f"📦 {annonce['Categorie']}"
+                f"📦 Catégorie : {annonce['Categorie']}"
             )
 
             st.write(
@@ -676,10 +814,12 @@ if len(resultats) > 0:
                 f"✨ État : {annonce['Etat']}"
             )
 
-            if str(annonce["URL"]).startswith("http"):
+            if str(
+                annonce["URL"]
+            ).startswith("http"):
 
                 st.link_button(
-                    "🔗 Voir l'annonce",
+                    "🔗 Ouvrir l'annonce",
                     annonce["URL"]
                 )
 
@@ -691,7 +831,7 @@ if len(resultats) > 0:
             )
 
             st.metric(
-                "💰 Revente",
+                "💰 Revente estimée",
                 f"{annonce['Revente estimée']:.2f} €"
             )
 
@@ -707,24 +847,21 @@ if len(resultats) > 0:
 
             st.metric(
                 "⭐ Score",
-                f"{annonce['Score']}/100"
+                f"{score}/100"
             )
 
         st.divider()
 
-else:
-
-    st.warning(
-        "Aucune annonce ne correspond à tes critères."
-    )
 
 # ============================================================
 # TABLEAU
 # ============================================================
 
-with st.expander("📋 Toutes les opportunités"):
+with st.expander(
+    "📋 Voir le tableau complet"
+):
 
-    colonnes_affichage = [
+    colonnes = [
         "Article",
         "Marque",
         "Categorie",
@@ -739,10 +876,11 @@ with st.expander("📋 Toutes les opportunités"):
     ]
 
     st.dataframe(
-        resultats[colonnes_affichage],
+        resultats[colonnes],
         use_container_width=True,
         hide_index=True
     )
+
 
 # ============================================================
 # EXPORT
@@ -750,16 +888,56 @@ with st.expander("📋 Toutes les opportunités"):
 
 if len(resultats) > 0:
 
-    csv = resultats.to_csv(
+    export = resultats.to_csv(
         index=False
     ).encode("utf-8")
 
     st.download_button(
-        "⬇️ Télécharger les opportunités",
-        csv,
+        "⬇️ Télécharger les résultats",
+        export,
         "vinted_opportunites.csv",
         "text/csv"
     )
+
+
+# ============================================================
+# MODÈLE CSV
+# ============================================================
+
+with st.expander(
+    "📄 Voir le format CSV attendu"
+):
+
+    exemple = pd.DataFrame({
+        "Article": [
+            "Half Zip"
+        ],
+        "Marque": [
+            "Ralph Lauren"
+        ],
+        "Categorie": [
+            "Pull"
+        ],
+        "Prix": [
+            25
+        ],
+        "Etat": [
+            "Très bon état"
+        ],
+        "Taille": [
+            "M"
+        ],
+        "URL": [
+            "https://www.vinted.fr/"
+        ]
+    })
+
+    st.dataframe(
+        exemple,
+        use_container_width=True,
+        hide_index=True
+    )
+
 
 # ============================================================
 # AVERTISSEMENT
@@ -768,6 +946,7 @@ if len(resultats) > 0:
 st.divider()
 
 st.caption(
-    "⚠️ Les prix de revente sont des estimations et non des garanties. "
-    "Vérifie toujours l'article, son état et son authenticité avant tout achat."
+    "⚠️ Les prix de revente sont des estimations. "
+    "Ils ne garantissent pas le prix auquel un article sera vendu. "
+    "Vérifie toujours l'état et l'authenticité avant un achat."
 )
